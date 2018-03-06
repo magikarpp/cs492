@@ -53,7 +53,7 @@ int isInt(char number[]){
 //get the time.
 double getTime(void){
   struct timeval tv;
-  double timeval = tv.tv_sec;
+  double timeval = tv.tv_sec*1000 + tv.tv_usec/1000;
   return timeval;
 }
 
@@ -217,12 +217,12 @@ void main(int argc, char** argv){
     printf("producer throughput at end: %f produced per minute.\n", createdProducts / runtimeMins);
     printf("consumer throughput at end: %f consumed per minute.\n", consumedProducts / runtimeMins);
 
-    printf("max turnaround: %f\n", max_turnaround);
-    printf("min turnaround: %f\n", min_turnaround);
-    printf("max wait: %f\n", max_wait);
-    printf("min wait: %f\n", min_wait);
-    printf("avg turnaround: %f\n", total_turnaround/createdProducts);
-    printf("avg wait: %f\n", total_wait/createdProducts);
+    printf("max turnaround: %f\n", max_turnaround/1000);
+    printf("min turnaround: %f\n", min_turnaround/1000);
+    printf("max wait: %f\n", max_wait/1000);
+    printf("min wait: %f\n", min_wait/1000);
+    printf("avg turnaround: %f\n", total_turnaround/createdProducts/1000);
+    printf("avg wait: %f\n", total_wait/createdProducts/1000);
 
     return;
 
