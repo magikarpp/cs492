@@ -16,6 +16,14 @@ int end = -1;
 int front = 0;
 int quantumVal;
 int schedulingVal;
+double total_turnaround;
+double max_turnaround;
+double min_turnaround;
+double total_wait;
+double max_wait;
+double min_wait;
+
+struct timeval startTime;
 
 pthread_mutex_t mainMutex;
 pthread_cond_t producerCondition;
@@ -24,7 +32,8 @@ pthread_cond_t consumerCondition;
 //struture for product.
 struct product{
   int product_id;
-  double time_stamp;
+  double create_stamp;
+  double wait_stamp;
   int life;
 };
 
@@ -78,6 +87,49 @@ int fn(int n){
   return fn(n-1) + fn(n-2);
 }
 
+void printConsumerThroughput() {
+
+    struct timeval currentTime;
+    double runtimeMillis;
+
+    pthread_mutex_lock(&mainMutex);
+    gettimeofday(&currentTime, NULL);
+
+    runtimeMillis = (currentTime.tv_sec - startTime.tv_sec) * 1000.0;      // seconds to ms
+    runtimeMillis += (currentTime.tv_usec - startTime.tv_usec) / 1000.0;   // us to ms
+
+    printf("runtime: %f milliseconds.\n", runtimeMillis);
+
+    // Convert to mins
+    double runtimeMins = runtimeMillis / 60000;
+
+    printf("throughput for consumer: %f consumed per minute AT %f millis since starting\n",
+           consumedProducts / runtimeMins, runtimeMillis);
+    fflush(stdout);
+    pthread_mutex_unlock(&mainMutex);
+}
+
+void printProducerThroughput() {
+    struct timeval currentTime;
+    double runtimeMillis;
+
+    pthread_mutex_lock(&mainMutex);
+    gettimeofday(&currentTime, NULL);
+
+    runtimeMillis = (currentTime.tv_sec - startTime.tv_sec) * 1000.0;      // sec to ms
+    runtimeMillis += (currentTime.tv_usec - startTime.tv_usec) / 1000.0;   // us to ms
+
+    printf("runtime: %f milliseconds.\n", runtimeMillis);
+
+    // Convert to mins
+    double runtimeMins = runtimeMillis / 60000;
+
+    printf("throughput for producer: %f produced per minute AT %f millis since starting\n",
+           consumedProducts / runtimeMins, runtimeMillis);
+    fflush(stdout);
+    pthread_mutex_unlock(&mainMutex);
+}
+
 void main(int argc, char** argv){
   //check if all 8 arguements are provided.
   if(argc == 8){
@@ -112,6 +164,13 @@ void main(int argc, char** argv){
     productQueue = malloc(sizeof(struct product)*queue_size);
     queueSize = queue_size;
 
+    total_turnaround = 0;
+    total_wait = 0;
+    min_turnaround = 1000.0;
+    max_turnaround = 0;
+    min_wait = 1000.0;
+    min_turnaround = 0;
+
     //initialize mutex & condition variables.
     pthread_mutex_init(&mainMutex, NULL);
     pthread_cond_init(&consumerCondition, NULL);
@@ -121,11 +180,11 @@ void main(int argc, char** argv){
 
     //create threads
     for(int i = 0; i < producer_number; i++){
-      producerID[i] = i;
+      producerID[i] = i+1;
       pthread_create(&producer_thread[i], NULL, producer, &producerID[i]);
     }
     for(int i = 0; i< consumer_number; i++){
-      consumerID[i] = i;
+      consumerID[i] = i+1;
       pthread_create(&consumer_thread[i], NULL, consumer, &consumerID[i]);
     }
 
@@ -140,6 +199,31 @@ void main(int argc, char** argv){
     free(productQueue);
 
     printf("\nThis is working!\n");
+
+    //print our runtime stats
+    struct timeval currentTime;
+    double runtimeMillis;
+
+    gettimeofday(&currentTime, NULL);
+
+    runtimeMillis = (currentTime.tv_sec - startTime.tv_sec) * 1000.0;      // sec to ms
+    runtimeMillis += (currentTime.tv_usec - startTime.tv_usec) / 1000.0;   // us to ms
+
+    printf("final runtime: %f milliseconds.\n", runtimeMillis);
+
+    // Convert to mins
+    double runtimeMins = runtimeMillis / 60000;
+
+    printf("producer throughput at end: %f produced per minute.\n", createdProducts / runtimeMins);
+    printf("consumer throughput at end: %f consumed per minute.\n", consumedProducts / runtimeMins);
+
+    printf("max turnaround: %f\n", max_turnaround);
+    printf("min turnaround: %f\n", min_turnaround);
+    printf("max wait: %f\n", max_wait);
+    printf("min wait: %f\n", min_wait);
+    printf("avg turnaround: %f\n", total_turnaround/createdProducts);
+    printf("avg wait: %f\n", total_wait/createdProducts);
+
     return;
 
   }else{
@@ -160,15 +244,17 @@ void *producer(int *thread){
     //add product to the queue.
     struct product created_product;
     created_product.product_id = createdProducts;
-    created_product.time_stamp = getTime();
+    created_product.create_stamp = getTime();
     created_product.life = random()%1024;
     insert(created_product);
+    created_product.wait_stamp = getTime();
     createdProducts++;
     printf("Producer %d has produced product %d.\n", *thread, created_product.product_id);
 
     //signals consumer thread and unlock mutex.
     pthread_cond_broadcast(&consumerCondition);
     pthread_mutex_unlock(&mainMutex);
+    printProducerThroughput();
     //sleep for 100milliseconds.
     usleep(100000);
   }
@@ -180,7 +266,8 @@ void *consumer(int *thread){
   struct product consumed_product;
   double take_time = 0;
   double put_time = 0;
-  double turn_around = 0;
+  double turnaround_time = 0;
+  double wait_time = 0;
   while(consumedProducts < maxProducts){
     pthread_mutex_lock(&mainMutex);
     while(createdProducts < maxProducts && productsQueued < queueSize){
@@ -188,7 +275,17 @@ void *consumer(int *thread){
     }
     //if there are products in the queue, remove and return its value to consumed_product.
     if(productsQueued != 0){
+
       consumed_product = removeFromQueue();
+      wait_time = getTime() - consumed_product.wait_stamp;
+      total_wait += wait_time;
+
+      if(wait_time < min_wait)
+        min_wait = wait_time;
+
+      else if(wait_time > max_wait)
+        max_wait = wait_time;
+
     }
     //Round Robin: if quantum value is less than life of product, we are able to subtract it from the product's life.
     if(consumed_product.life > quantumVal && schedulingVal == 1){
@@ -205,9 +302,19 @@ void *consumer(int *thread){
       }
       consumedProducts++;
       printf("Consumer %d has consumed product %d.\n", *thread, consumed_product.product_id);
+
+      turnaround_time = getTime() - consumed_product.create_stamp;
+      total_turnaround += turnaround_time;
+
+      if(turnaround_time < min_turnaround)
+        min_turnaround = turnaround_time;
+
+      else if(turnaround_time > max_turnaround)
+        max_turnaround = turnaround_time;
     }
     pthread_cond_broadcast(&producerCondition);
     pthread_mutex_unlock(&mainMutex);
+    printConsumerThroughput();
     usleep(100000);
   }
   pthread_exit(0);
