@@ -107,10 +107,10 @@ void pushFifo(struct pageTable* tab, int num)
         }
     }
     else
-        printf("Error allocating memory with struct fifo\n");
+        printf("\nError allocating memory with struct fifo\n");
 }
 
-int indexOfLRUValidPage(struct pageTable* tab)
+int LRUCheck(struct pageTable* tab)
 {
     int i;
     int ret;
@@ -136,38 +136,38 @@ int indexOfLRUValidPage(struct pageTable* tab)
 int popClock(struct pageTable* tab)
 {
     int ret;
-    struct fifo* tmp;
+    struct fifo* temp;
     struct fifo* f;
 
     ret = -1;
     if (tab->head != NULL)
     {
-        tmp = tab->head;
+        temp = tab->head;
 
         while (1)
         {
-            if (tmp->repChance) /* set repChance to zero and add to end */
+            if (temp->repChance)
             {
-                tmp->repChance = 0;
+                temp->repChance = 0;
 
-                /* update in place if head has one element */
+
                 if (tab->head->next != NULL)
-                    tab->head = tmp->next;
+                    tab->head = temp->next;
 
-                f = tmp;
+                f = temp;
                 while (f->next != NULL)
                     f = f->next;
-                f->next = tmp;
-                tmp->next = NULL;
+                f->next = temp;
+                temp->next = NULL;
 
-                /* start again at the new head */
-                tmp = tab->head;
+
+                temp = tab->head;
             }
-            else /* return this one */
+            else
             {
-                ret = tmp->pageNumber;
-                tab->head = tmp->next;
-                free(tmp);
+                ret = temp->pageNumber;
+                tab->head = temp->next;
+                free(temp);
                 break;
             }
         }
@@ -200,13 +200,13 @@ void pushClock(struct pageTable* tab, int num)
         }
     }
     else
-        printf("Error pushing with Clock struct fifo\n");
+        printf("\nError: pushing Clock\n");
 }
 
 int main(int argc, char** argv){
 
   if(argc != 6){
-    printf("\nInput: [VMsimulator] [plist] [ptrace] [int(size of pages)] [replacementAlgorithm] [+/-]");
+    printf("\nInput: [VMsimulator] [plist] [ptrace] [int(size of pages)] [replacementAlgorithm] [+/-]\n");
     return -1;
   }
 
@@ -217,7 +217,7 @@ int main(int argc, char** argv){
   //***
   char* replacementAlgorithm = argv[4]; //replacement Algorithm Method
   if (strcmp(replacementAlgorithm, "FIFO") && strcmp(replacementAlgorithm, "LRU") && strcmp(replacementAlgorithm, "Clock")){
-    printf("\nInput: incorrect replacementAlgorithm: (options) FIFO, LRU, or Clock");
+    printf("\nInput: incorrect replacementAlgorithm: (options) FIFO, LRU, or Clock\n");
     return -1;
   }
   int prePaging;  //prePaging initialize
@@ -226,7 +226,7 @@ int main(int argc, char** argv){
   }else if(!strcmp(argv[5], "-")){
     prePaging = 0;
   }else{
-    printf("\nInput: incorrect prePaging: (options) + or -");
+    printf("\nInput: incorrect prePaging: (options) + or -\n");
     return -1;
   }
 
@@ -237,7 +237,7 @@ int main(int argc, char** argv){
   FILE* ptraceFile = fopen("ptrace.txt", "r");
 
   if(plistFile == NULL || ptraceFile == NULL){
-    printf("\nError: file location");
+    printf("\nError: file location\n");
     return -1;
   }
 
@@ -269,7 +269,7 @@ int main(int argc, char** argv){
   if(processCounter > 0){
     pageTables = (struct pageTable**)malloc(sizeof(struct pageTable*)*processCounter);
     if(pageTables == NULL){
-      printf("\nError: memory allocation");
+      printf("\nError: memory allocation\n");
       return -1;
     }
     //rewind
@@ -285,7 +285,7 @@ int main(int argc, char** argv){
       strtok(line, " ");
       pageTables[i] = createPageTable(pageSize, atoi(strtok(NULL, " ")));
       if(pageTables[i] == NULL){
-        printf("\nError: memory allocation");
+        printf("\nError: memory allocation\n");
         return -1;
       }
       i++;
@@ -316,7 +316,7 @@ int main(int argc, char** argv){
                 temp->next = n;
               }
           } else{
-            printf("Error: memory allocation with FIFO");
+            printf("Error: memory allocation with FIFO\n");
           }
         }
         //if algorithm: Clock
@@ -421,12 +421,12 @@ int main(int argc, char** argv){
 
           //if algorithm: LRU
           if(!strcmp(replacementAlgorithm, "LRU")){
-            i = indexOfLRUValidPage(temp_table);
+            i = LRUCheck(temp_table);
             if(i > -1){
               temp_table->pages[i]->validBit = 0;
               temp_table->numLoaded--;
             }
-            i = indexOfLRUValidPage(temp_table);
+            i = LRUCheck(temp_table);
             if(i > -1){
               temp_table->pages[i]->validBit = 0;
               temp_table->numLoaded--;
@@ -512,7 +512,7 @@ int main(int argc, char** argv){
           }
 
           if(!strcmp(replacementAlgorithm, "LRU")){
-            i = indexOfLRUValidPage(temp_table);
+            i = LRUCheck(temp_table);
             if(i > -1){
               temp_table->pages[i]->validBit = 0;
               temp_table->numLoaded--;
